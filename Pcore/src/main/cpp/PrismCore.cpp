@@ -1,6 +1,7 @@
 #include "PrismCore.h"
 #include <jni.h>
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -19,6 +20,19 @@
 
 namespace {
 constexpr const char* kNativeTraceTag = "PrismNativeBootstrap";
+
+constexpr uint32_t kHookUnixFs = 1u << 0;
+constexpr uint32_t kHookRuntime = 1u << 1;
+constexpr uint32_t kHookRuntimeObserveOnly = 1u << 2;
+constexpr uint32_t kHookDex = 1u << 3;
+constexpr uint32_t kHookDexObserveOnly = 1u << 4;
+constexpr uint32_t kHookVmClassLoader = 1u << 5;
+constexpr uint32_t kHookBinder = 1u << 6;
+
+std::atomic<uint32_t>& HookStatusMask() {
+    static std::atomic<uint32_t> mask{0};
+    return mask;
+}
 
 std::mutex& NativeTraceMutex() { static std::mutex m; return m; }
 std::string& NativeTracePath() { static std::string p; return p; }
@@ -99,12 +113,40 @@ static jboolean NativeBootstrap(JNIEnv* env, jclass clazz, jstring tracePath) {
     }
 
     TraceNativeAlways("native_bootstrap_enter");
-    prism::hook::unixfs::Install(env);
-    prism::hook::runtime::Install(env);
-    prism::hook::dexfile::Install(env);
-    prism::hook::vmclassloader::Install(env);
-    prism::hook::binder::Install(env);
-    return JNI_TRUE;
+
+    uint32_t mask = 0;
+
+    const bool unixfs_ok = prism::hook::unixfs::Install(env);
+    if (unixfs_ok) mask |= kHookUnixFs;
+
+    const bool runtime_ok = prism::hook::runtime::Install(env);
+    if (runtime_ok) mask |= kHookRuntime;
+    if (prism::hook::runtime::GetMode() == prism::hook::runtime::RUNTIME_MODE_OBSERVE_ONLY) {
+        mask |= kHookRuntimeObserveOnly;
+    }
+
+    const bool dex_ok = prism::hook::dexfile::Install(env);
+    if (dex_ok) mask |= kHookDex;
+    if (prism::hook::dexfile::GetMode() == prism::hook::dexfile::DEX_MODE_OBSERVE_ONLY) {
+        mask |= kHookDexObserveOnly;
+    }
+
+    const bool vmcl_ok = prism::hook::vmclassloader::Install(env);
+    if (vmcl_ok) mask |= kHookVmClassLoader;
+
+    const bool binder_ok = prism::hook::binder::Install(env);
+    if (binder_ok) mask |= kHookBinder;
+
+    HookStatusMask().store(mask, std::memory_order_release);
+    TraceNativeAlways("native_bootstrap_status_mask=" + std::to_string(mask));
+
+    // Bootstrap is considered alive when at least one native subsystem initialized. Individual
+    // subsystem health is exposed separately; Java must not interpret this as "all hooks active".
+    return mask != 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+static jint NativeReadHookStatus(JNIEnv*, jclass) {
+    return static_cast<jint>(HookStatusMask().load(std::memory_order_acquire));
 }
 
 void NativeEnableIO(JNIEnv*, jclass) {
@@ -155,6 +197,7 @@ static const JNINativeMethod kMethods[] = {
     {(char*)"nativeEnterAppScope", (char*)"()V", (void*)NativeEnterAppScope},
     {(char*)"nativeExitAppScope", (char*)"()V", (void*)NativeExitAppScope},
     {(char*)"nativeBootstrap", (char*)"(Ljava/lang/String;)Z", (void*)NativeBootstrap},
+    {(char*)"nativeReadHookStatus", (char*)"()I", (void*)NativeReadHookStatus},
     {(char*)"nativeEnableIO", (char*)"()V", (void*)NativeEnableIO},
     {(char*)"nativeAddIORule", (char*)"(Ljava/lang/String;Ljava/lang/String;)V", (void*)NativeAddIORule},
     {(char*)"nativeDisableHiddenApi", (char*)"()Z", (void*)NativeDisableHiddenApi},
@@ -199,7 +242,7 @@ Java_com_prismspace_container_core_NativeCore_nativeDisableResourceLoading(JNIEn
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_prismspace_container_core_NativeCore_nativeNotifyMemoryPressure(JNIEnv* env, jclass clazz, jint level) {
-    prism::core::NativeNotifyMemoryPressure(env, clazz, level);
+    prism::core::NativeNotifyMemoryPressure(level);
 }
 
 extern "C" JNIEXPORT void JNICALL
