@@ -37,11 +37,20 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;29.0.13846066"
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
+      - name: Make scripts executable
+        run: chmod +x gradlew scripts/native-bringup-probe.sh
 
       - name: Test engine compatibility helpers
         run: ./gradlew --no-daemon :Pcore:testDebugUnitTest
+
+      - name: Probe native A0 baseline
+        run: bash scripts/native-bringup-probe.sh A0 B9 arm64-v8a
+
+      - name: Probe native A1 xDL
+        run: bash scripts/native-bringup-probe.sh A1 B9 arm64-v8a
+
+      - name: Probe native A2 Dobby
+        run: bash scripts/native-bringup-probe.sh A2 B9 arm64-v8a
 
       - name: Build debug APK and engine AAR
         run: ./gradlew --no-daemon :app:assembleDebug :Pcore:assembleDebug
