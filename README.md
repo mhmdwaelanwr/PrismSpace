@@ -24,6 +24,7 @@ PrismSpace/
 ├── Pcore/              # Virtualization/runtime engine
 ├── black-reflection/   # Reflection helpers
 ├── compiler/           # Annotation/code generation support
+├── scripts/            # Engine/native diagnostic probes
 └── .github/workflows/  # CI
 ```
 
@@ -47,6 +48,12 @@ Native Prism policy engine + native hooks
 
 Notable Prism-specific components include `PrismEngineFacade`, `AppCloneManager`, `CloneRuntimeController`, `ClonePolicyBuilder`, `PolicySnapshotBuilder`, `PolicyPublisher`, `ClonePolicyService`, and the native `PolicyEngine` / `PrismCore` layer.
 
+### Engine truth layer
+
+PrismSpace is moving toward capability-driven compatibility rather than assuming that a hook is healthy just because its code exists. The engine now has a runtime capability registry for critical Java and native subsystems, plus device facts such as API level, ABI, and runtime page size.
+
+The native dependency bring-up remains conservative by default (`A0`). CI probes `A0`, `A1` (xDL), and `A2` (Dobby) independently and forces real symbols from staged static dependencies into the link so an unused archive cannot produce a false-positive result. These probes validate build/link readiness; they do **not** automatically enable xDL or Dobby in the default runtime path.
+
 ## Build
 
 Requirements:
@@ -63,9 +70,19 @@ Then run:
 
 The project currently compiles with SDK 35 while retaining a lower target SDK for virtualization compatibility. Treat target-SDK changes as runtime/compatibility work, not a cosmetic version bump.
 
+To probe a native dependency stage independently on ARM64:
+
+```bash
+bash scripts/native-bringup-probe.sh A0 B9 arm64-v8a
+bash scripts/native-bringup-probe.sh A1 B9 arm64-v8a
+bash scripts/native-bringup-probe.sh A2 B9 arm64-v8a
+```
+
+Each probe uses a separate output directory and verifies the produced `libprismspace.so` LOAD-segment alignment for 16 KB page-size readiness.
+
 ## CI
 
-GitHub Actions builds the debug APK and the `Pcore` debug AAR on pushes and pull requests targeting `main`.
+GitHub Actions runs engine compatibility unit tests, staged ARM64 native bring-up probes, and then builds the debug APK and `Pcore` debug AAR on pushes and pull requests targeting `main`.
 
 ## Upstream and credits
 
