@@ -1,6 +1,5 @@
 package com.prismspace.container.core;
 
-import android.os.Build;
 import android.util.Log;
 import androidx.annotation.Keep;
 import java.nio.ByteBuffer;
@@ -12,7 +11,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import com.prismspace.container.PrismSpaceCore;
 
 /**
  * H6: Unified Native Control Plane.
@@ -20,6 +18,16 @@ import com.prismspace.container.PrismSpaceCore;
 @SuppressWarnings({"JavaJniMissingFunction", "unused"})
 public class NativeCore {
     public static final String TAG = "NativeCore";
+
+    private static final int HOOK_UNIX_FS = 1 << 0;
+    private static final int HOOK_RUNTIME = 1 << 1;
+    private static final int HOOK_RUNTIME_OBSERVE_ONLY = 1 << 2;
+    private static final int HOOK_DEX = 1 << 3;
+    private static final int HOOK_DEX_OBSERVE_ONLY = 1 << 4;
+    private static final int HOOK_VM_CLASS_LOADER = 1 << 5;
+    private static final int HOOK_BINDER = 1 << 6;
+    private static final int REQUIRED_HOOK_MASK =
+            HOOK_UNIX_FS | HOOK_RUNTIME | HOOK_DEX | HOOK_VM_CLASS_LOADER | HOOK_BINDER;
 
     private static final AtomicReference<Boolean> sIsReady = new AtomicReference<>(false);
     private static final AtomicBoolean sBootstrapStarted = new AtomicBoolean(false);
@@ -34,6 +42,8 @@ public class NativeCore {
 
     //noinspection JavaJniMissingFunction
     public static native boolean nativeBootstrap(String tracePath);
+    //noinspection JavaJniMissingFunction
+    public static native int nativeReadHookStatus();
     //noinspection JavaJniMissingFunction
     public static native boolean nativeInstallPolicyFromFd(int fd, long declaredSize, long generation, int transport);
     //noinspection JavaJniMissingFunction
@@ -66,15 +76,65 @@ public class NativeCore {
         }
         sBootstrapExecutor.execute(() -> {
             try {
-                if (nativeBootstrap("")) {
+                boolean bootstrapAlive = nativeBootstrap("");
+                int statusMask = nativeReadHookStatus();
+                publishNativeCapabilities(bootstrapAlive, statusMask);
+
+                if (bootstrapAlive) {
                     sIsReady.set(true);
-                    Log.i(TAG, "Native bootstrap successful");
+                    Log.i(TAG, "Native bootstrap completed with statusMask=" + statusMask);
+                } else {
+                    // A failed probe must be retryable. The old implementation left this latched.
+                    sBootstrapStarted.set(false);
+                    Log.e(TAG, "Native bootstrap failed: no native subsystem initialized");
                 }
             } catch (Throwable t) {
                 sBootstrapStarted.set(false);
+                EngineCapabilities.get().mark(
+                        EngineCapabilities.Component.NATIVE_BOOTSTRAP,
+                        EngineCapabilities.State.FAILED,
+                        t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
                 Log.e(TAG, "Native bootstrap critical failure", t);
             }
         });
+    }
+
+    private static void publishNativeCapabilities(boolean bootstrapAlive, int statusMask) {
+        EngineCapabilities capabilities = EngineCapabilities.get();
+        boolean complete = (statusMask & REQUIRED_HOOK_MASK) == REQUIRED_HOOK_MASK;
+
+        capabilities.mark(
+                EngineCapabilities.Component.NATIVE_BOOTSTRAP,
+                !bootstrapAlive ? EngineCapabilities.State.FAILED
+                        : complete ? EngineCapabilities.State.ACTIVE : EngineCapabilities.State.DEGRADED,
+                "mask=0x" + Integer.toHexString(statusMask));
+
+        markBinaryCapability(capabilities, EngineCapabilities.Component.UNIX_FS,
+                (statusMask & HOOK_UNIX_FS) != 0, false);
+        markBinaryCapability(capabilities, EngineCapabilities.Component.RUNTIME_LOAD,
+                (statusMask & HOOK_RUNTIME) != 0,
+                (statusMask & HOOK_RUNTIME_OBSERVE_ONLY) != 0);
+        markBinaryCapability(capabilities, EngineCapabilities.Component.DEX_LOAD,
+                (statusMask & HOOK_DEX) != 0,
+                (statusMask & HOOK_DEX_OBSERVE_ONLY) != 0);
+        markBinaryCapability(capabilities, EngineCapabilities.Component.VM_CLASS_LOADER,
+                (statusMask & HOOK_VM_CLASS_LOADER) != 0, false);
+        markBinaryCapability(capabilities, EngineCapabilities.Component.BINDER,
+                (statusMask & HOOK_BINDER) != 0, false);
+    }
+
+    private static void markBinaryCapability(
+            EngineCapabilities capabilities,
+            EngineCapabilities.Component component,
+            boolean installed,
+            boolean observeOnly) {
+        if (!installed) {
+            capabilities.mark(component, EngineCapabilities.State.FAILED, "native install failed");
+        } else if (observeOnly) {
+            capabilities.mark(component, EngineCapabilities.State.DEGRADED, "observe-only");
+        } else {
+            capabilities.mark(component, EngineCapabilities.State.ACTIVE, "intercept active");
+        }
     }
 
     public static boolean isReady() { return sIsReady.get(); }
@@ -91,6 +151,10 @@ public class NativeCore {
             nativeEnableIO();
         } catch (Throwable t) {
             sIoEnabled.set(false);
+            EngineCapabilities.get().mark(
+                    EngineCapabilities.Component.UNIX_FS,
+                    EngineCapabilities.State.FAILED,
+                    "enable IO failed: " + t.getClass().getSimpleName());
             Log.e(TAG, "startupEnableIO failed", t);
         }
     }
@@ -113,8 +177,17 @@ public class NativeCore {
     public static boolean startupDisableHiddenApi() {
         ensureBootstrapped();
         try {
-            return nativeDisableHiddenApi();
+            boolean enabled = nativeDisableHiddenApi();
+            EngineCapabilities.get().mark(
+                    EngineCapabilities.Component.HIDDEN_API,
+                    enabled ? EngineCapabilities.State.ACTIVE : EngineCapabilities.State.DEGRADED,
+                    enabled ? "native exemption active" : "native bypass unavailable; Java fallback may be attempted");
+            return enabled;
         } catch (Throwable t) {
+            EngineCapabilities.get().mark(
+                    EngineCapabilities.Component.HIDDEN_API,
+                    EngineCapabilities.State.DEGRADED,
+                    "native bypass error: " + t.getClass().getSimpleName());
             Log.e(TAG, "startupDisableHiddenApi failed", t);
             return false;
         }
