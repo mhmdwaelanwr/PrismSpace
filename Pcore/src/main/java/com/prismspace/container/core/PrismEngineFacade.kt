@@ -12,6 +12,7 @@ import com.prismspace.container.core.privacy.DeviceProfileManager
 import com.prismspace.container.entity.location.PLocation
 import com.prismspace.container.entity.pm.InstallResult
 import com.prismspace.container.fake.frameworks.PLocationManager
+import com.prismspace.container.fake.hook.HookManager
 import com.prismspace.container.utils.Slog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -54,6 +55,41 @@ object PrismEngineFacade {
             Slog.e(TAG, "Engine initialization failed", t)
             false
         }
+    }
+
+    /**
+     * Re-probes the non-destructive runtime truth surfaces used by Engine Diagnostics.
+     * This intentionally verifies existing hooks/status rather than reinstalling the engine.
+     */
+    suspend fun refreshDiagnostics(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val capabilities = EngineCapabilities.get()
+        val initOk = initEngine(context)
+        val core = PrismSpaceCore.get()
+
+        val servicesReady = runCatching {
+            core.ensureCorePackageServicesReady(SERVICE_READY_TIMEOUT_MS)
+        }.onFailure {
+            Slog.e(TAG, "Diagnostics core-service probe failed", it)
+        }.getOrDefault(false)
+
+        capabilities.mark(
+            EngineCapabilities.Component.CORE_SERVICES,
+            if (servicesReady) EngineCapabilities.State.ACTIVE else EngineCapabilities.State.DEGRADED,
+            if (servicesReady) "core package services ready" else "core services not fully ready"
+        )
+
+        runCatching {
+            HookManager.get().checkAll()
+        }.onFailure {
+            Slog.e(TAG, "Diagnostics hook integrity check failed", it)
+        }
+
+        // Native bootstrap is asynchronous during normal startup. Ask for it if needed, then read
+        // the currently exported mask without forcing a second hook installation.
+        NativeCore.ensureBootstrapped()
+        NativeCore.refreshCapabilities()
+
+        initOk && servicesReady
     }
 
     suspend fun getInstalledApps(): List<ApplicationInfo> = withContext(Dispatchers.IO) {
@@ -362,7 +398,7 @@ object PrismEngineFacade {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
             drawable.javaClass.name.contains("AdaptiveIconDrawable")) {
             runCatching {
                 val bg = drawable.javaClass.getMethod("getBackground").invoke(drawable) as? Drawable
