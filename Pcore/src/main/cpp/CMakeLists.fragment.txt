@@ -1,0 +1,22 @@
+# Recommended 2026 native hardening fragment for arm64.
+# Merge these flags into your existing Pcore/src/main/cpp/CMakeLists.txt.
+
+target_compile_features(prismspace PRIVATE cxx_std_20)
+
+target_compile_options(prismspace PRIVATE
+    -Wall
+    -Wextra
+    -Werror=return-type
+    -Werror=format-security
+    -fvisibility=hidden
+    -ffunction-sections
+    -fdata-sections)
+
+# PAC/BTI hardening for arm64-v8a. Keep all hook-related translation units consistent.
+target_compile_options(prismspace PRIVATE
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-mbranch-protection=standard>)
+
+target_link_options(prismspace PRIVATE
+    -Wl,--gc-sections
+    -Wl,--exclude-libs,ALL
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-mbranch-protection=standard>)

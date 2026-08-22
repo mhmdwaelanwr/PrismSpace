@@ -1,0 +1,8 @@
+# Add these sources alongside the replacement core set.
+set(PRISMSPACE_HOOK_SOURCES
+    Hook/BinderHook.cpp
+    Hook/UnixFileSystemHook.cpp
+    Hook/VMClassLoaderHook.cpp
+    Hook/RuntimeHook.cpp
+    Hook/DexFileHook.cpp
+)

@@ -1,0 +1,16 @@
+plugins {
+    alias(libs.plugins.java.library)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    annotationProcessor(libs.auto.service)
+    compileOnly(libs.auto.service)
+    implementation(libs.javapoet)
+    implementation project(':black-reflection')
+}

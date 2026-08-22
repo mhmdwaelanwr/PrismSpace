@@ -1,0 +1,90 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.jetbrains.kotlin.android)
+}
+
+android {
+    namespace = 'com.prismspace.container'
+    compileSdk = rootProject.ext.compileSdkVersion
+    
+    buildFeatures {
+        aidl true
+        prefab = true
+    }
+
+    defaultConfig {
+        minSdk = rootProject.ext.minSdk
+        consumerProguardFiles "consumer-rules.pro"
+        ndk {
+            abiFilters 'arm64-v8a' , 'armeabi-v7a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path = 'src/main/cpp/Android.mk'
+        }
+        ndkVersion = "29.0.13846066"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+    
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    
+    lint {
+        abortOnError = false
+        checkOnly 'NewApi', 'InlinedApi'
+        checkReleaseBuilds = false
+        disable 'UnusedResources', 'RestrictedApi'
+        textOutput file('stdout')
+        textReport = false
+        warningsAsErrors = false
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-Xlint:-deprecation" << "-Xlint:-unchecked" << "-Xlint:-rawtypes"
+    options.fork = true
+    options.forkOptions.jvmArgs << "-Xmx2048m"
+}
+
+
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addStringOption('encoding', 'UTF-8')
+    options.addStringOption('charSet', 'UTF-8')
+}
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
+    implementation libs.material.legacy
+    implementation libs.coroutines.core
+    implementation libs.coroutines.android
+    implementation(project(":black-reflection"))
+    annotationProcessor(project(":compiler"))
+    implementation libs.appcompat.legacy
+    implementation libs.toml4j
+    implementation libs.free.reflection
+}

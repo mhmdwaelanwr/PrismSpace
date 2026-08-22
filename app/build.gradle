@@ -1,0 +1,113 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+android {
+    namespace = 'com.prismspace.container'
+    compileSdk = rootProject.ext.compileSdkVersion
+    ndkVersion = "29.0.13846066"
+
+    defaultConfig {
+        applicationId = "com.prismspace.container"
+        minSdk = rootProject.ext.minSdk
+        targetSdk = rootProject.ext.targetSdkVersion
+        versionCode = rootProject.ext.versionCode
+        versionName = rootProject.ext.versionName
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        splits {
+            abi {
+                enable true
+                reset()
+                include 'armeabi-v7a', "arm64-v8a"
+                universalApk true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        viewBinding = true
+        compose = true
+    }
+
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def versionName = android.defaultConfig.versionName ?: "dev"
+            def versionCode = android.defaultConfig.versionCode ?: 0
+            def abiFilter = output.filters.find { it.filterType.name() == "ABI" }?.identifier
+            def apkSuffix = abiFilter ?: "universal"
+            output.outputFileName.set("PrismSpace-v${versionName}(${versionCode})_${variant.name}_${apkSuffix}.apk")
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
+    implementation project(':Pcore')
+
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.constraintlayout
+    implementation libs.core.ktx
+    implementation libs.compose.ui
+    implementation libs.compose.material3
+    implementation libs.compose.preview
+    implementation libs.compose.tooling
+    implementation libs.compose.foundation
+    implementation libs.compose.lifecycle
+    implementation libs.compose.activity
+    implementation libs.compose.runtime
+    implementation libs.compose.icons
+    implementation libs.navigation.compose
+    implementation libs.lifecycle.runtime.ktx
+    implementation libs.lifecycle.viewmodel
+    
+    implementation libs.coil.compose
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+
+    implementation libs.androidx.preference.ktx
+    
+    implementation libs.lifecycle.viewmodel.ktx.legacy
+    implementation libs.lifecycle.livedata.ktx.legacy
+    implementation libs.lifecycle.runtime.ktx.legacy
+
+    implementation libs.androidx.recyclerview
+    implementation libs.rv.adapter
+
+    implementation libs.corner.label.view
+    implementation libs.stateview
+    implementation libs.simple.search.view
+    implementation libs.dots.indicator
+    implementation libs.osmdroid.android
+    implementation libs.material.dialogs.core
+    implementation libs.material.dialogs.input
+
+    implementation libs.androidx.work.runtime
+
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.crashlytics
+}
