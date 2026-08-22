@@ -64,6 +64,16 @@ ifneq ($(filter B9,$(PRISM_DIAGNOSTIC_SRC_STAGE)),)
 LOCAL_SRC_FILES += PrismCore.cpp
 endif
 
+# Force staged dependency archives to contribute real symbols to the final link. Without this,
+# an unused static archive can be silently skipped and produce a false-positive bring-up result.
+ifneq ($(filter A1 A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
+LOCAL_SRC_FILES += DiagnosticDependencyProbe.cpp
+LOCAL_CPPFLAGS += -DPRISM_PROBE_XDL=1
+endif
+ifneq ($(filter A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
+LOCAL_CPPFLAGS += -DPRISM_PROBE_DOBBY=1
+endif
+
 LOCAL_C_INCLUDES += $(LOCAL_PATH)
 LOCAL_CFLAGS += -std=c++17
 LOCAL_CPPFLAGS += -std=c++17
