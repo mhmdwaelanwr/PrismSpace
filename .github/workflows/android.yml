@@ -46,6 +46,9 @@ jobs:
       - name: Make scripts executable
         run: chmod +x gradlew scripts/native-bringup-probe.sh scripts/run-device-validation.sh
 
+      - name: Test device report comparator
+        run: python3 scripts/compare-device-validation.py --self-test
+
       - name: Test engine compatibility helpers
         run: ./gradlew --no-daemon :Pcore:testDebugUnitTest
 
