@@ -1,11 +1,5 @@
 pluginManagement {
     repositories {
-        maven { url "https://www.jitpack.io" }
-        maven { url 'https://maven.aliyun.com/repository/releases' }
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
-        maven { url 'https://maven.aliyun.com/repository/public' }
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -15,22 +9,43 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
-    }
-}
-plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
-}
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        maven { url "https://www.jitpack.io" }
+        maven {
+            url "https://www.jitpack.io"
+            content {
+                includeGroupByRegex("com\\.github\\..*")
+            }
+        }
+        // Mirrors are intentionally last. A transient mirror outage must not block
+        // artifacts that are available from Google's or Maven Central's canonical repos.
         maven { url 'https://maven.aliyun.com/repository/releases' }
         maven { url 'https://maven.aliyun.com/repository/google' }
         maven { url 'https://maven.aliyun.com/repository/central' }
         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
         maven { url 'https://maven.aliyun.com/repository/public' }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
         google()
         mavenCentral()
+        maven {
+            url "https://www.jitpack.io"
+            content {
+                includeGroupByRegex("com\\.github\\..*")
+            }
+        }
+        // Keep mirrors as fallback-only sources for legacy artifacts.
+        maven { url 'https://maven.aliyun.com/repository/releases' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
     }
 }
 
@@ -40,4 +55,3 @@ include ':app'
 include(":black-reflection")
 include(":compiler")
 include ':Pcore'
-
