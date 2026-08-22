@@ -137,6 +137,38 @@ public class NativeCore {
         }
     }
 
+    /**
+     * Re-read native hook truth without reinstalling hooks. This is safe for diagnostics and lets
+     * the UI distinguish stale assumptions from the bitmask currently exported by native code.
+     */
+    public static int refreshCapabilities() {
+        try {
+            int statusMask = nativeReadHookStatus();
+
+            // ensureBootstrapped() runs asynchronously. A zero mask while that worker is still
+            // running is not evidence of failure, so preserve an UNKNOWN/pending state until the
+            // bootstrap publishes its observed result.
+            if (statusMask == 0 && !sIsReady.get() && sBootstrapStarted.get()) {
+                EngineCapabilities.get().mark(
+                        EngineCapabilities.Component.NATIVE_BOOTSTRAP,
+                        EngineCapabilities.State.UNKNOWN,
+                        "bootstrap pending");
+                return 0;
+            }
+
+            boolean bootstrapAlive = sIsReady.get() || statusMask != 0;
+            publishNativeCapabilities(bootstrapAlive, statusMask);
+            return statusMask;
+        } catch (Throwable t) {
+            EngineCapabilities.get().mark(
+                    EngineCapabilities.Component.NATIVE_BOOTSTRAP,
+                    EngineCapabilities.State.FAILED,
+                    "status refresh failed: " + t.getClass().getSimpleName());
+            Log.e(TAG, "refreshCapabilities failed", t);
+            return 0;
+        }
+    }
+
     public static boolean isReady() { return sIsReady.get(); }
 
     // Legacy-compatible entry points used by existing Java lifecycle code paths.
