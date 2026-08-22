@@ -36,8 +36,6 @@ import com.prismspace.container.proxy.record.ProxyActivityRecord;
 import com.prismspace.container.utils.Slog;
 import com.prismspace.container.utils.compat.PuildCompat;
 
-
-
 public class HCallbackProxy implements IInjectHook, Handler.Callback {
     public static final String TAG = "HCallbackStub";
     private Handler.Callback mOtherCallback;
@@ -63,8 +61,8 @@ public class HCallbackProxy implements IInjectHook, Handler.Callback {
 
     @Override
     public boolean isBadEnv() {
-        Handler.Callback hCallback = getHCallback();
-        return hCallback != null && hCallback != this;
+        // A null callback means the hook is not installed, so it must be reported as unhealthy.
+        return getHCallback() != this;
     }
 
     @Override
@@ -119,10 +117,8 @@ public class HCallbackProxy implements IInjectHook, Handler.Callback {
     private boolean handleLaunchActivity(Object client) {
         Object r;
         if (PuildCompat.isPie()) {
-            
             r = getLaunchActivityItem(client);
         } else {
-            
             r = client;
         }
         if (r == null)
@@ -166,7 +162,7 @@ public class HCallbackProxy implements IInjectHook, Handler.Callback {
                 }
                 return true;
             }
-            
+
             if (!PActivityThread.currentActivityThread().isInit()) {
                 PActivityThread.currentActivityThread().bindApplication(activityInfo.packageName,
                         activityInfo.processName);
@@ -235,4 +231,3 @@ public class HCallbackProxy implements IInjectHook, Handler.Callback {
         }
     }
 }
-

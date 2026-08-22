@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,10 +21,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -28,6 +32,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install SDK and NDK
         run: |
@@ -37,8 +43,20 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;29.0.13846066"
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
+      - name: Make scripts executable
+        run: chmod +x gradlew scripts/native-bringup-probe.sh
+
+      - name: Test engine compatibility helpers
+        run: ./gradlew --no-daemon :Pcore:testDebugUnitTest
+
+      - name: Probe native A0 baseline
+        run: bash scripts/native-bringup-probe.sh A0 B9 arm64-v8a
+
+      - name: Probe native A1 xDL
+        run: bash scripts/native-bringup-probe.sh A1 B9 arm64-v8a
+
+      - name: Probe native A2 Dobby
+        run: bash scripts/native-bringup-probe.sh A2 B9 arm64-v8a
 
       - name: Build debug APK and engine AAR
         run: ./gradlew --no-daemon :app:assembleDebug :Pcore:assembleDebug

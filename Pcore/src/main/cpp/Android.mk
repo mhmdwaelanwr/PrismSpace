@@ -1,8 +1,10 @@
 LOCAL_PATH := $(call my-dir)
 
-PRISM_DIAGNOSTIC_LAYERED_BRINGUP := true
-PRISM_DIAGNOSTIC_DEP_STAGE := A0
-PRISM_DIAGNOSTIC_SRC_STAGE := B9
+# Defaults stay conservative, but CI/local diagnostic builds can override these on the
+# ndk-build command line (for example PRISM_DIAGNOSTIC_DEP_STAGE=A1).
+PRISM_DIAGNOSTIC_LAYERED_BRINGUP ?= true
+PRISM_DIAGNOSTIC_DEP_STAGE ?= A0
+PRISM_DIAGNOSTIC_SRC_STAGE ?= B9
 
 ifeq ($(PRISM_DIAGNOSTIC_LAYERED_BRINGUP),true)
 
@@ -62,10 +64,23 @@ ifneq ($(filter B9,$(PRISM_DIAGNOSTIC_SRC_STAGE)),)
 LOCAL_SRC_FILES += PrismCore.cpp
 endif
 
+# Force staged dependency archives to contribute real symbols to the final link. Without this,
+# an unused static archive can be silently skipped and produce a false-positive bring-up result.
+ifneq ($(filter A1 A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
+LOCAL_SRC_FILES += DiagnosticDependencyProbe.cpp
+LOCAL_CPPFLAGS += -DPRISM_PROBE_XDL=1
+endif
+ifneq ($(filter A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
+LOCAL_CPPFLAGS += -DPRISM_PROBE_DOBBY=1
+endif
+
 LOCAL_C_INCLUDES += $(LOCAL_PATH)
 LOCAL_CFLAGS += -std=c++17
 LOCAL_CPPFLAGS += -std=c++17
 LOCAL_LDLIBS := -llog -landroid -ldl -lz
+# Android 15+ devices may use 16 KB pages. Apply alignment to the actual diagnostic
+# build path too; previously it existed only in the legacy/non-diagnostic branch.
+LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384
 
 ifneq ($(filter A1 A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
 LOCAL_STATIC_LIBRARIES += xdl

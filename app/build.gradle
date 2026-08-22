@@ -83,29 +83,19 @@ dependencies {
     implementation libs.navigation.compose
     implementation libs.lifecycle.runtime.ktx
     implementation libs.lifecycle.viewmodel
-    
+
     implementation libs.coil.compose
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
 
     implementation libs.androidx.preference.ktx
-    
+
     implementation libs.lifecycle.viewmodel.ktx.legacy
     implementation libs.lifecycle.livedata.ktx.legacy
     implementation libs.lifecycle.runtime.ktx.legacy
 
     implementation libs.androidx.recyclerview
-    implementation libs.rv.adapter
-
-    implementation libs.corner.label.view
-    implementation libs.stateview
-    implementation libs.simple.search.view
-    implementation libs.dots.indicator
-    implementation libs.osmdroid.android
-    implementation libs.material.dialogs.core
-    implementation libs.material.dialogs.input
-
     implementation libs.androidx.work.runtime
 
     implementation platform(libs.firebase.bom)
