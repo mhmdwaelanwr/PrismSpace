@@ -87,4 +87,6 @@ dependencies {
     implementation libs.appcompat.legacy
     implementation libs.toml4j
     implementation libs.free.reflection
+
+    testImplementation libs.junit
 }
