@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.prismspace.container.PrismSpaceCore;
+import com.prismspace.container.core.EngineCapabilities;
 import com.prismspace.container.fake.delegate.AppInstrumentation;
 
 import com.prismspace.container.fake.service.HCallbackProxy;
@@ -92,8 +93,6 @@ import com.prismspace.container.fake.service.ISettingsProviderProxy;
 import com.prismspace.container.fake.service.FeatureFlagUtilsProxy;
 import com.prismspace.container.fake.service.WorkManagerProxy;
 
-
-
 public class HookManager {
     public static final String TAG = "HookManager";
 
@@ -157,69 +156,65 @@ public class HookManager {
             addInjector(new IAccountManagerProxy());
             addInjector(new IConnectivityManagerProxy());
             addInjector(new IDnsResolverProxy());
-                    addInjector(new IAttributionSourceProxy());
-        addInjector(new IContentProviderProxy());
-        addInjector(new ISettingsSystemProxy());
-        addInjector(new ISystemSensorManagerProxy());
-        
-        
-        addInjector(new IXiaomiAttributionSourceProxy());
-        addInjector(new IXiaomiSettingsProxy());
-        addInjector(new IXiaomiMiuiServicesProxy());
+            addInjector(new IAttributionSourceProxy());
+            addInjector(new IContentProviderProxy());
+            addInjector(new ISettingsSystemProxy());
+            addInjector(new ISystemSensorManagerProxy());
+            addInjector(new IXiaomiAttributionSourceProxy());
+            addInjector(new IXiaomiSettingsProxy());
+            addInjector(new IXiaomiMiuiServicesProxy());
             addInjector(new IPhoneSubInfoProxy());
             addInjector(new IMediaRouterServiceProxy());
             addInjector(new IPowerManagerProxy());
             addInjector(new IContextHubServiceProxy());
-            
             addInjector(new IVibratorServiceProxy());
             addInjector(new IPersistentDataBlockServiceProxy());
             addInjector(AppInstrumentation.get());
-            
             addInjector(new IWifiManagerProxy());
             addInjector(new IWifiScannerProxy());
             addInjector(new ApkAssetsProxy());
             addInjector(new ResourcesManagerProxy());
-            
+
             if (PuildCompat.isS()) {
                 addInjector(new IActivityClientProxy(null));
                 addInjector(new IVpnManagerProxy());
             }
-            
+
             if (PuildCompat.isS()) {
                 addInjector(new ISensitiveContentProtectionManagerProxy());
             }
-            
+
             if (PuildCompat.isR()) {
                 addInjector(new IPermissionManagerProxy());
             }
-            
+
             if (PuildCompat.isQ()) {
                 addInjector(new IActivityTaskManagerProxy());
             }
-            
+
             if (PuildCompat.isPie()) {
                 addInjector(new ISystemUpdateProxy());
             }
-            
+
             if (PuildCompat.isOreo()) {
                 addInjector(new IAutofillManagerProxy());
                 addInjector(new IDeviceIdentifiersPolicyProxy());
                 addInjector(new IStorageStatsManagerProxy());
             }
-            
+
             if (PuildCompat.isN_MR1()) {
                 addInjector(new IShortcutManagerProxy());
             }
-            
+
             if (PuildCompat.isN()) {
                 addInjector(new INetworkManagementServiceProxy());
             }
-            
+
             if (PuildCompat.isM()) {
                 addInjector(new IFingerprintManagerProxy());
                 addInjector(new IGraphicsStatsProxy());
             }
-            
+
             if (PuildCompat.isL()) {
                 addInjector(new IJobServiceProxy());
             }
@@ -232,6 +227,7 @@ public class HookManager {
         if (iInjectHook != null && iInjectHook.isBadEnv()) {
             Log.d(TAG, "checkEnv: " + clazz.getSimpleName() + " is bad env");
             iInjectHook.injectHook();
+            publishHookCapability(iInjectHook, isHookHealthy(iInjectHook), "environment recheck");
         }
     }
 
@@ -241,6 +237,9 @@ public class HookManager {
             if (iInjectHook != null && iInjectHook.isBadEnv()) {
                 Log.d(TAG, "checkEnv: " + aClass.getSimpleName() + " is bad env");
                 iInjectHook.injectHook();
+            }
+            if (iInjectHook != null) {
+                publishHookCapability(iInjectHook, isHookHealthy(iInjectHook), "environment check");
             }
         }
     }
@@ -254,79 +253,108 @@ public class HookManager {
             try {
                 Slog.d(TAG, "hook: " + value);
                 value.injectHook();
+                boolean healthy = isHookHealthy(value);
+                publishHookCapability(value, healthy, healthy ? "injected" : "inject returned but environment is bad");
             } catch (Exception e) {
                 Slog.d(TAG, "hook error: " + value);
-                
+                publishHookCapability(value, false, e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
                 handleHookError(value, e);
             }
         }
     }
 
-    
     private void handleHookError(IInjectHook hook, Exception e) {
         String hookName = hook.getClass().getSimpleName();
-        
-        
         Slog.e(TAG, "Hook failed: " + hookName + " - " + e.getMessage(), e);
-        
-        
-        if (hookName.contains("ActivityManager") || 
+
+        if (hookName.contains("ActivityManager") ||
             hookName.contains("PackageManager") ||
             hookName.contains("WebView") ||
             hookName.contains("ContentProvider")) {
-            
+
             Slog.w(TAG, "Critical hook failed: " + hookName + ", attempting recovery");
-            
+
             try {
-                
                 if (hook.isBadEnv()) {
                     Slog.d(TAG, "Attempting to recover hook: " + hookName);
                     hook.injectHook();
                 }
+                publishHookCapability(hook, isHookHealthy(hook), "recovery attempted");
             } catch (Exception recoveryException) {
+                publishHookCapability(hook, false,
+                        "recovery failed: " + recoveryException.getClass().getSimpleName());
                 Slog.e(TAG, "Hook recovery failed: " + hookName, recoveryException);
             }
         }
     }
 
-    
+    private boolean isHookHealthy(IInjectHook hook) {
+        try {
+            return !hook.isBadEnv();
+        } catch (Throwable t) {
+            Slog.w(TAG, "Unable to verify hook health: " + hook.getClass().getSimpleName(), t);
+            return false;
+        }
+    }
+
+    private void publishHookCapability(IInjectHook hook, boolean healthy, String detail) {
+        EngineCapabilities.Component component = capabilityFor(hook);
+        if (component == null) return;
+        EngineCapabilities.get().mark(
+                component,
+                healthy ? EngineCapabilities.State.ACTIVE : EngineCapabilities.State.FAILED,
+                hook.getClass().getSimpleName() + ": " + detail);
+    }
+
+    private EngineCapabilities.Component capabilityFor(IInjectHook hook) {
+        if (hook instanceof IActivityManagerProxy) {
+            return EngineCapabilities.Component.ACTIVITY_MANAGER;
+        }
+        if (hook instanceof IPackageManagerProxy) {
+            return EngineCapabilities.Component.PACKAGE_MANAGER;
+        }
+        if (hook instanceof IActivityTaskManagerProxy) {
+            return EngineCapabilities.Component.ACTIVITY_TASK_MANAGER;
+        }
+        if (hook instanceof HCallbackProxy) {
+            return EngineCapabilities.Component.H_CALLBACK;
+        }
+        return null;
+    }
+
     public boolean areCriticalHooksInstalled() {
         String[] criticalHooks = {
             "IActivityManagerProxy",
-            "IPackageManagerProxy", 
-            "WebViewProxy",
-            "IContentProviderProxy"
+            "IPackageManagerProxy",
+            "HCallbackProxy"
         };
-        
+
         for (String hookName : criticalHooks) {
-            boolean found = false;
-            for (Class<?> hookClass : mInjectors.keySet()) {
-                if (hookClass.getSimpleName().equals(hookName)) {
-                    found = true;
+            IInjectHook matched = null;
+            for (IInjectHook hook : mInjectors.values()) {
+                if (hook.getClass().getSimpleName().equals(hookName)) {
+                    matched = hook;
                     break;
                 }
             }
-            if (!found) {
+            if (matched == null) {
                 Slog.w(TAG, "Critical hook missing: " + hookName);
                 return false;
             }
+            if (!isHookHealthy(matched)) {
+                Slog.w(TAG, "Critical hook unhealthy: " + hookName);
+                return false;
+            }
         }
-        
-        Slog.d(TAG, "All critical hooks are installed");
+
+        Slog.d(TAG, "All critical hooks are installed and healthy");
         return true;
     }
 
-    
     public void reinitializeHooks() {
         Slog.d(TAG, "Reinitializing all hooks");
-        
-        
         mInjectors.clear();
-        
-        
         init();
-        
         Slog.d(TAG, "Hook reinitialization completed");
     }
 }
-
