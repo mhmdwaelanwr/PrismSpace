@@ -1,8 +1,10 @@
 LOCAL_PATH := $(call my-dir)
 
-PRISM_DIAGNOSTIC_LAYERED_BRINGUP := true
-PRISM_DIAGNOSTIC_DEP_STAGE := A0
-PRISM_DIAGNOSTIC_SRC_STAGE := B9
+# Defaults stay conservative, but CI/local diagnostic builds can override these on the
+# ndk-build command line (for example PRISM_DIAGNOSTIC_DEP_STAGE=A1).
+PRISM_DIAGNOSTIC_LAYERED_BRINGUP ?= true
+PRISM_DIAGNOSTIC_DEP_STAGE ?= A0
+PRISM_DIAGNOSTIC_SRC_STAGE ?= B9
 
 ifeq ($(PRISM_DIAGNOSTIC_LAYERED_BRINGUP),true)
 
