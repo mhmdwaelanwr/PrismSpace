@@ -144,6 +144,18 @@ public class NativeCore {
     public static int refreshCapabilities() {
         try {
             int statusMask = nativeReadHookStatus();
+
+            // ensureBootstrapped() runs asynchronously. A zero mask while that worker is still
+            // running is not evidence of failure, so preserve an UNKNOWN/pending state until the
+            // bootstrap publishes its observed result.
+            if (statusMask == 0 && !sIsReady.get() && sBootstrapStarted.get()) {
+                EngineCapabilities.get().mark(
+                        EngineCapabilities.Component.NATIVE_BOOTSTRAP,
+                        EngineCapabilities.State.UNKNOWN,
+                        "bootstrap pending");
+                return 0;
+            }
+
             boolean bootstrapAlive = sIsReady.get() || statusMask != 0;
             publishNativeCapabilities(bootstrapAlive, statusMask);
             return statusMask;
