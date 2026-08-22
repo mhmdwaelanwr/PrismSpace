@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,8 +68,8 @@ fun EngineDiagnosticsScreen(
     var refreshVersion by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
 
-    // Reading the registry is side-effect free. refreshVersion intentionally participates in
-    // this read so a completed engine initialization produces a fresh snapshot.
+    // EngineCapabilities is intentionally platform-neutral state rather than Compose state.
+    // Reading this key makes a completed probe trigger a fresh snapshot on recomposition.
     @Suppress("UNUSED_VARIABLE")
     val refreshKey = refreshVersion
     val registry = EngineCapabilities.get()
@@ -80,6 +81,21 @@ fun EngineDiagnosticsScreen(
     val degradedCount = statuses.count { it.value.state == EngineCapabilities.State.DEGRADED }
     val failedCount = statuses.count { it.value.state == EngineCapabilities.State.FAILED }
     val unknownCount = statuses.count { it.value.state == EngineCapabilities.State.UNKNOWN }
+
+    suspend fun refreshRuntimeTruth() {
+        if (refreshing) return
+        refreshing = true
+        try {
+            PrismEngineFacade.refreshDiagnostics(context.applicationContext)
+            refreshVersion++
+        } finally {
+            refreshing = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshRuntimeTruth()
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -142,13 +158,7 @@ fun EngineDiagnosticsScreen(
             ) {
                 Button(
                     onClick = {
-                        if (refreshing) return@Button
-                        refreshing = true
-                        scope.launch {
-                            PrismEngineFacade.initEngine(context.applicationContext)
-                            refreshVersion++
-                            refreshing = false
-                        }
+                        scope.launch { refreshRuntimeTruth() }
                     },
                     enabled = !refreshing,
                     modifier = Modifier.weight(1f)
