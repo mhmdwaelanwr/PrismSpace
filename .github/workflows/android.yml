@@ -40,5 +40,8 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Test engine compatibility helpers
+        run: ./gradlew --no-daemon :Pcore:testDebugUnitTest
+
       - name: Build debug APK and engine AAR
         run: ./gradlew --no-daemon :app:assembleDebug :Pcore:assembleDebug
