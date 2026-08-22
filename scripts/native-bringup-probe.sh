@@ -7,14 +7,22 @@ SRC_STAGE="${2:-B9}"
 ABI="${3:-arm64-v8a}"
 NDK_VERSION="${PRISM_NDK_VERSION:-29.0.13846066}"
 
-if [[ -n "${ANDROID_NDK_HOME:-}" && -x "${ANDROID_NDK_HOME}/ndk-build" ]]; then
-  NDK_ROOT="${ANDROID_NDK_HOME}"
-elif [[ -n "${ANDROID_SDK_ROOT:-}" && -x "${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}/ndk-build" ]]; then
+# Prefer the exact side-by-side NDK requested by PrismSpace. Hosted runners often export
+# ANDROID_NDK_HOME to a different preinstalled NDK, which would make a green probe misleading.
+if [[ -n "${ANDROID_SDK_ROOT:-}" && -x "${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}/ndk-build" ]]; then
   NDK_ROOT="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
 elif [[ -n "${ANDROID_HOME:-}" && -x "${ANDROID_HOME}/ndk/${NDK_VERSION}/ndk-build" ]]; then
   NDK_ROOT="${ANDROID_HOME}/ndk/${NDK_VERSION}"
+elif [[ -n "${ANDROID_NDK_HOME:-}" && -x "${ANDROID_NDK_HOME}/ndk-build" ]]; then
+  SOURCE_PROPS="${ANDROID_NDK_HOME}/source.properties"
+  if [[ -f "${SOURCE_PROPS}" ]] && grep -Eq "^Pkg\.Revision[[:space:]]*=[[:space:]]*${NDK_VERSION//./\.}([[:space:]]*)$" "${SOURCE_PROPS}"; then
+    NDK_ROOT="${ANDROID_NDK_HOME}"
+  else
+    echo "ANDROID_NDK_HOME points to a different NDK; expected ${NDK_VERSION}: ${ANDROID_NDK_HOME}" >&2
+    exit 2
+  fi
 else
-  echo "Unable to locate Android NDK ${NDK_VERSION}" >&2
+  echo "Unable to locate exact Android NDK ${NDK_VERSION}" >&2
   exit 2
 fi
 
@@ -37,6 +45,9 @@ mkdir -p "${OBJ_DIR}" "${LIB_DIR}"
 echo "== Prism native bring-up probe =="
 echo "stage=${STAGE} src=${SRC_STAGE} abi=${ABI}"
 echo "ndk=${NDK_ROOT}"
+if [[ -f "${NDK_ROOT}/source.properties" ]]; then
+  grep '^Pkg.Revision' "${NDK_ROOT}/source.properties" || true
+fi
 
 "${NDK_ROOT}/ndk-build" \
   -C "${ROOT_DIR}/Pcore/src/main" \
@@ -57,7 +68,13 @@ if [[ ! -f "${SO_PATH}" ]]; then
   exit 3
 fi
 
-READELF="${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+PREBUILT_HOST="linux-x86_64"
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) PREBUILT_HOST="linux-x86_64" ;;
+  Darwin-x86_64) PREBUILT_HOST="darwin-x86_64" ;;
+  Darwin-arm64) PREBUILT_HOST="darwin-x86_64" ;;
+esac
+READELF="${NDK_ROOT}/toolchains/llvm/prebuilt/${PREBUILT_HOST}/bin/llvm-readelf"
 if [[ -x "${READELF}" ]]; then
   echo "== ELF LOAD segments =="
   "${READELF}" -lW "${SO_PATH}" | awk '$1 == "LOAD" { print }'
