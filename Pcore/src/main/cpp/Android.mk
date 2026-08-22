@@ -66,6 +66,9 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)
 LOCAL_CFLAGS += -std=c++17
 LOCAL_CPPFLAGS += -std=c++17
 LOCAL_LDLIBS := -llog -landroid -ldl -lz
+# Android 15+ devices may use 16 KB pages. Apply alignment to the actual diagnostic
+# build path too; previously it existed only in the legacy/non-diagnostic branch.
+LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384
 
 ifneq ($(filter A1 A2 A3 A4,$(PRISM_DIAGNOSTIC_DEP_STAGE)),)
 LOCAL_STATIC_LIBRARIES += xdl
