@@ -96,7 +96,6 @@ dependencies {
     implementation libs.lifecycle.runtime.ktx.legacy
 
     implementation libs.androidx.recyclerview
-    implementation libs.rv.adapter
 
     implementation libs.corner.label.view
     implementation libs.stateview
