@@ -2,72 +2,89 @@ package com.prismspace.container.utils.compat;
 
 import android.os.Build;
 
+/**
+ * Android platform/ROM capability helpers.
+ *
+ * Keep platform checks centralized here. New engine code should prefer capability probing where
+ * possible, but when an API-level gate is unavoidable these helpers provide one consistent source
+ * of truth (including preview builds).
+ */
 public class PuildCompat {
 
     public static int getPreviewSDKInt() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
                 return Build.VERSION.PREVIEW_SDK_INT;
-            } catch (Throwable e) {
-                
+            } catch (Throwable ignored) {
             }
         }
         return 0;
     }
 
-    
+    /** Visible for unit tests so version semantics can be validated without mutating Build.VERSION. */
+    static boolean isAtLeast(int sdkInt, int previewSdkInt, int targetApi) {
+        if (sdkInt >= targetApi) {
+            return true;
+        }
+        return sdkInt == targetApi - 1 && previewSdkInt > 0;
+    }
+
+    public static boolean isAndroid17() {
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 37);
+    }
+
+    public static boolean isAndroid16() {
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 36);
+    }
+
+    public static boolean isAndroid15() {
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 35);
+    }
+
+    /** Android 14 / UpsideDownCake (API 34). */
     public static boolean isU() {
-        return Build.VERSION.SDK_INT >= 33 || (Build.VERSION.SDK_INT >= 32 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 34);
     }
 
-    
+    /** Android 13 / Tiramisu (API 33). */
     public static boolean isTiramisu() {
-        return Build.VERSION.SDK_INT >= 32 || (Build.VERSION.SDK_INT >= 31 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 33);
     }
 
-    
     public static boolean isS() {
-        return Build.VERSION.SDK_INT >= 31 || (Build.VERSION.SDK_INT >= 30 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 31);
     }
 
-    
     public static boolean isR() {
-        return Build.VERSION.SDK_INT >= 30 || (Build.VERSION.SDK_INT >= 29 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 30);
     }
 
-    
     public static boolean isQ() {
-        return Build.VERSION.SDK_INT >= 29 || (Build.VERSION.SDK_INT >= 28 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 29);
     }
 
-    
     public static boolean isPie() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P || (Build.VERSION.SDK_INT >= 27 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 28);
     }
 
-    
     public static boolean isOreo() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O || (Build.VERSION.SDK_INT >= 25 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 26);
     }
 
-    
     public static boolean isN_MR1() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1 || (Build.VERSION.SDK_INT >= 24 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 25);
     }
 
-    
     public static boolean isN() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N || (Build.VERSION.SDK_INT >= 23 && Build.VERSION.PREVIEW_SDK_INT == 1);
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 24);
     }
 
-    
     public static boolean isM() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 23);
     }
 
-    
     public static boolean isL() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
+        return isAtLeast(Build.VERSION.SDK_INT, getPreviewSDKInt(), 21);
     }
 
     public static boolean isSamsung() {
@@ -107,7 +124,6 @@ public class PuildCompat {
     public static boolean isVivo() {
         return SystemPropertiesCompat.isExist("ro.vivo.os.build.display.id");
     }
-
 
     private static ROMType sRomType;
 
