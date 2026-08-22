@@ -242,7 +242,7 @@ Java_com_prismspace_container_core_NativeCore_nativeDisableResourceLoading(JNIEn
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_prismspace_container_core_NativeCore_nativeNotifyMemoryPressure(JNIEnv* env, jclass clazz, jint level) {
-    prism::core::NativeNotifyMemoryPressure(level);
+    prism::core::NativeNotifyMemoryPressure(env, clazz, level);
 }
 
 extern "C" JNIEXPORT void JNICALL
