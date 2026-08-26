@@ -1,58 +1,101 @@
 # PrismSpace
 
-PrismSpace is an experimental Android application virtualization and cloning environment built around a virtualized Android runtime, Binder/service interception, I/O redirection, per-clone policy controls, and a native policy engine.
+<p align="center">
+  <strong>Experimental Android application virtualization and multi-instance runtime.</strong><br>
+  Binder interception · I/O redirection · per-clone policy controls · native runtime hooks
+</p>
 
-> **Status:** active development. PrismSpace is a research/engineering project and should not be treated as a security boundary until its isolation model has been independently reviewed.
+<p align="center">
+  <img alt="Android" src="https://img.shields.io/badge/Android-Runtime-3DDC84?style=flat-square&logo=android&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
+  <img alt="Native" src="https://img.shields.io/badge/Native-ARM64%20%7C%20ARMv7-555?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-active%20research-orange?style=flat-square">
+</p>
 
-## Highlights
+PrismSpace explores how an Android host application can run and manage virtualized application instances while presenting each clone with its own runtime-facing package, service, storage, location, and policy state.
 
-- Run and manage virtualized application instances inside a host app.
-- Virtual package, activity, service, storage, notification, location, and related Android service layers.
-- Binder and framework service interception.
-- Native filesystem / Unix I/O hooks and redirection.
+The project combines Java/Kotlin framework interception with native I/O policy enforcement and focuses on **measurable runtime capability** rather than assuming a subsystem works because its hook code exists.
+
+> **Status:** active research and engineering. PrismSpace should not be treated as a security boundary until its isolation model has been independently reviewed and validated.
+
+## Core capabilities
+
+- Virtualized application instances managed inside a host application.
+- Package, activity, service, storage, notification, location, and related virtual system layers.
+- Binder and Android framework service interception.
+- Filesystem and Unix I/O redirection through native hooks.
 - Per-clone policy snapshots and runtime policy publishing.
-- Native policy engine for fast path-based decisions.
+- Native policy engine for path-based decisions on performance-sensitive paths.
 - Virtual location and device-profile controls.
 - ARM64 and ARMv7 native builds.
-- Modern host UI built with Jetpack Compose.
-
-## Project structure
-
-```text
-PrismSpace/
-├── app/                # Host application and UI
-├── Pcore/              # Virtualization/runtime engine
-├── black-reflection/   # Reflection helpers
-├── compiler/           # Annotation/code generation support
-├── scripts/            # Engine/native diagnostic probes
-└── .github/workflows/  # CI
-```
+- Jetpack Compose host interface.
 
 ## Architecture
 
-At a high level:
-
 ```text
-Compose UI
-   ↓
+Jetpack Compose UI
+        ↓
 PrismEngineFacade
-   ↓
+        ↓
 Clone / Runtime controllers
-   ↓
+        ↓
 Virtual system services + Binder proxies
-   ↓
+        ↓
 IOCore / PolicyPublisher
-   ↓
-Native Prism policy engine + native hooks
+        ↓
+Native policy engine + native hooks
 ```
 
-Notable Prism-specific components include `PrismEngineFacade`, `AppCloneManager`, `CloneRuntimeController`, `ClonePolicyBuilder`, `PolicySnapshotBuilder`, `PolicyPublisher`, `ClonePolicyService`, and the native `PolicyEngine` / `PrismCore` layer.
+Important Prism-specific components include:
 
-### Engine truth layer
+- `PrismEngineFacade`
+- `AppCloneManager`
+- `CloneRuntimeController`
+- `ClonePolicyBuilder`
+- `PolicySnapshotBuilder`
+- `PolicyPublisher`
+- `ClonePolicyService`
+- native `PolicyEngine` / `PrismCore`
 
-PrismSpace is moving toward capability-driven compatibility rather than assuming that a hook is healthy just because its code exists. The engine now has a runtime capability registry for critical Java and native subsystems, plus device facts such as API level, ABI, and runtime page size.
+## Runtime capability model
 
-The native dependency bring-up remains conservative by default (`A0`). CI probes `A0`, `A1` (xDL), and `A2` (Dobby) independently and forces real symbols from staged static dependencies into the link so an unused archive cannot produce a false-positive result. These probes validate build/link readiness; they do **not** automatically enable xDL or Dobby in the default runtime path.
+PrismSpace is moving toward capability-driven compatibility. Critical Java and native subsystems can report runtime capability state alongside device facts such as API level, ABI, and runtime page size.
+
+That distinction matters for virtualization work: successfully compiling or loading a hook is not the same as proving that it behaves correctly on a real runtime.
+
+## Native bring-up strategy
+
+Native dependency bring-up remains conservative by default.
+
+CI probes three stages independently:
+
+- `A0` — baseline native path.
+- `A1` — xDL bring-up probe.
+- `A2` — Dobby bring-up probe.
+
+The probe jobs force real symbols from staged static dependencies into the final link so an unused archive cannot create a false-positive integration result. Passing these probes demonstrates build/link readiness; it does **not** automatically enable xDL or Dobby in the default runtime path.
+
+For ARM64:
+
+```bash
+bash scripts/native-bringup-probe.sh A0 B9 arm64-v8a
+bash scripts/native-bringup-probe.sh A1 B9 arm64-v8a
+bash scripts/native-bringup-probe.sh A2 B9 arm64-v8a
+```
+
+Each stage uses an isolated output directory and verifies the generated `libprismspace.so` LOAD-segment alignment for 16 KB page-size readiness.
+
+## Repository structure
+
+```text
+PrismSpace/
+├── app/                # Host application and Compose UI
+├── Pcore/              # Virtualization/runtime engine
+├── black-reflection/   # Reflection helpers
+├── compiler/           # Annotation/code generation support
+├── scripts/            # Native and engine diagnostic probes
+└── .github/workflows/  # CI pipelines
+```
 
 ## Build
 
@@ -62,40 +105,37 @@ Requirements:
 - Android SDK 35
 - Android NDK `29.0.13846066`
 
-Then run:
+Build the debug application with:
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
 
-The project currently compiles with SDK 35 while retaining a lower target SDK for virtualization compatibility. Treat target-SDK changes as runtime/compatibility work, not a cosmetic version bump.
-
-To probe a native dependency stage independently on ARM64:
-
-```bash
-bash scripts/native-bringup-probe.sh A0 B9 arm64-v8a
-bash scripts/native-bringup-probe.sh A1 B9 arm64-v8a
-bash scripts/native-bringup-probe.sh A2 B9 arm64-v8a
-```
-
-Each probe uses a separate output directory and verifies the produced `libprismspace.so` LOAD-segment alignment for 16 KB page-size readiness.
+The project currently compiles against SDK 35 while retaining a lower target SDK for virtualization compatibility. Target-SDK changes should therefore be treated as runtime compatibility work rather than a cosmetic version update.
 
 ## CI
 
-GitHub Actions runs engine compatibility unit tests, staged ARM64 native bring-up probes, and then builds the debug APK and `Pcore` debug AAR on pushes and pull requests targeting `main`.
+GitHub Actions currently exercises:
 
-## Upstream and credits
+- engine compatibility unit tests,
+- staged ARM64 native bring-up probes,
+- debug APK builds,
+- `Pcore` debug AAR builds.
 
-PrismSpace is derived from and inspired by work in the Android virtualization and hooking ecosystem, including **NewBlackbox / BlackBox**, **VirtualApp**, and related open-source projects.
+These checks run on pushes and pull requests targeting `main`.
 
-The current codebase started from **ALEX5402/NewBlackbox** and has since introduced PrismSpace-specific runtime, policy, native-engine, and UI work. Upstream attribution is intentionally retained here and in source history where applicable.
+## Upstream and attribution
 
-Please review the licenses of upstream and third-party components before redistributing modified binaries or incorporating code from additional projects.
+PrismSpace is derived from and inspired by work across the Android virtualization and hooking ecosystem, including **NewBlackbox / BlackBox**, **VirtualApp**, and related open-source projects.
 
-## License
+The codebase started from **ALEX5402/NewBlackbox** and has since gained PrismSpace-specific runtime, policy, native-engine, capability-reporting, and UI work. Upstream attribution is intentionally retained in this README and in source history where applicable.
 
-This repository includes an Apache License 2.0 `LICENSE` file. Individual bundled or third-party components may have their own notices or license requirements; those remain applicable to their respective code.
+Review the licenses and notices of upstream and third-party components before redistributing modified binaries or incorporating additional code.
 
 ## Responsible use
 
-PrismSpace is intended for legitimate Android research, compatibility testing, application isolation experiments, and multi-instance use. Users are responsible for complying with applicable laws, platform rules, application terms, and software licenses.
+PrismSpace is intended for legitimate Android research, compatibility testing, application-isolation experiments, and multi-instance engineering. Users are responsible for complying with applicable laws, platform policies, application terms, and software licenses.
+
+## License
+
+The repository includes an Apache License 2.0 `LICENSE` file. Individual bundled or third-party components may carry additional license or notice requirements, which remain applicable to their respective code.
